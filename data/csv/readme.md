@@ -1,0 +1,2 @@
+- ratings_given.csv - matrix entries given in the format (j,k,eval(j,k)) where eval(j,k) is user k's evaluation of movie j.
+- ratings_test_eval.csv - contains (i,j,k) where i=1,2,…,200041 and (j,k) are the positions of the inputs to be predicted.
