@@ -24,7 +24,8 @@ class SVDModelABC(ABC):
         min_delta=0.001,
         min_rating=1,
         max_rating=5,
-        optimizer="SGD",
+        optimizer="BCD",
+        batch_size=128
     ):
         """
         Initializes the SVD model parameters.
@@ -60,6 +61,7 @@ class SVDModelABC(ABC):
         self.min_rating = min_rating
         self.max_rating = max_rating
         self.optimizer_name = optimizer
+        self.batch_size = batch_size
 
     def fit(self, X, X_val=None):
         """

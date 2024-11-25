@@ -1,4 +1,5 @@
-from svd_models import SimpleSVDModel
+import numpy as np
+from svd_models import SimpleSVDModel, ImprovedSVDModel, ExperimentalSVDModel
 
 import pandas as pd
 from scipy.sparse import csr_matrix
@@ -26,6 +27,7 @@ def dense_to_sparse(data: pd.DataFrame):
 
     return sparse_df
 
+
 def run_simple_example():
     data_dir = "data/csv/simple_user_movie_ratings.csv"
 
@@ -37,36 +39,89 @@ def run_simple_example():
 
     sparse_df = dense_to_sparse(data_no_none)
 
-    model = SimpleSVDModel(n_factors=1, min_rating=1, max_rating=4, lr=0.05)
+    model = SimpleSVDModel(
+        n_factors=1, min_rating=1, max_rating=5, batch_size=1, n_epochs=50, lr=0.05
+    )
 
     model.fit(X=sparse_df)
 
+    test_data = dense_to_sparse(data)
     pred = model.predict(X=dense_to_sparse(data))
 
-    print(sparse_df)
-    print(pred)
-    
-    
-def run_full():
+    test_data["pred"] = np.array(pred)
+    print(test_data)
+
+
+def run_simple_model():
     data_dir = "data/csv/ratings_given.csv"
     data_pred_dir = "data/csv/ratings_test_eval.csv"
-    
-    data = pd.read_csv(data_dir, names=['u_id', 'i_id', 'rating'])
-    data_pred = pd.read_csv(data_pred_dir, names=['u_id', 'i_id', 'rating'])
-    
-    data_train, data_val = train_test_split(data[:5000], test_size=0.05, shuffle=True)
-    
+
+    data = pd.read_csv(data_dir, names=["u_id", "i_id", "rating"])
+    data_pred = pd.read_csv(data_pred_dir, names=["u_id", "i_id", "rating"])
+
+    data_train, data_val = train_test_split(data, test_size=0.05, shuffle=True)
+
     print(data_train)
     print(data_val)
-    
-    model = SimpleSVDModel(reg=0)
-    
+
+    model = SimpleSVDModel(n_factors=10, shuffle=True, optimizer="BCD")
+
     model.fit(data_train, data_val)
-    
+
     pred = model.predict(data_val)
     print(data_val)
     print(pred)
 
+
+def run_improved_model():
+    data_dir = "data/csv/ratings_given.csv"
+    data_pred_dir = "data/csv/ratings_test_eval.csv"
+
+    data = pd.read_csv(data_dir, names=["u_id", "i_id", "rating"])
+    data_pred = pd.read_csv(data_pred_dir, names=["u_id", "i_id", "rating"])
+
+    data_train, data_val = train_test_split(data, test_size=0.05, shuffle=True)
+
+    print(data_train)
+    print(data_val)
+
+    model = ImprovedSVDModel(n_factors=10, shuffle=True, optimizer="BCD")
+
+    model.fit(data_train, data_val)
+
+    pred = model.predict(data_val[:5])
+    print(data_val[:5])
+    print(pred)
+
+
+def run_experimental_model():
+    data_dir = "data/csv/ratings_given.csv"
+    data_pred_dir = "data/csv/ratings_test_eval.csv"
+
+    users_dir = "data/csv/users_proc.csv"
+    movies_dir = "data/csv/movies_proc.csv"
+
+    data = pd.read_csv(data_dir, names=["u_id", "i_id", "rating"])
+    data_pred = pd.read_csv(data_pred_dir, names=["u_id", "i_id", "rating"])
+    users_df = pd.read_csv(users_dir)
+    users_df = users_df.rename(columns={"user_id": "u_id"})
+    movies_df = pd.read_csv(movies_dir)
+    movies_df = movies_df.rename(columns={"movie_id": "i_id"})
+
+    data_train, data_val = train_test_split(data, test_size=0.05, shuffle=True)
+
+    # print(data_train)
+    # print(data_val)
+
+    model = ExperimentalSVDModel(n_factors=10, shuffle=True, optimizer="BCD", n_epochs=10)
+
+    model.fit(data_train, data_val)
+    model.fit_residual(data_train, users_metadata=users_df, items_metadata=movies_df)
     
-if __name__ == '__main__':
-    run_full()
+    pred = model.predict(data_val[:5])
+    print(data_val[:5])
+    print(pred)
+
+
+if __name__ == "__main__":
+    run_improved_model()
