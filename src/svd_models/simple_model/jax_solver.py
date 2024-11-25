@@ -6,9 +6,11 @@ from jax import numpy as jnp
 def mse(target, pred):
     return jnp.mean(jnp.square(pred - target))
 
-@jax.jit
-def grad_loss(target, pred, loss_fn=mse):    
-    return jax.grad(loss_fn, argnums=[0])(target, pred)
+
+# @jax.jit
+# def grad_loss(target, pred, loss_fn=mse):
+#     return jax.grad(loss_fn, argnums=[0])(target, pred)
+
 
 @jax.jit
 def _predict(U, V, user, item):
@@ -204,8 +206,15 @@ def run_epoch_bcd(X, U, V, lr, reg):
 @jax.jit
 def run_epoch_bcd_wolfe(X, U, V, lr, reg):
 
+    def _grad_func(fixed_param, errors):
+        return 2 * jnp.dot(fixed_param.T, errors)
+
+    def _update_func(update_param, descent_dir, lr, reg):
+        updated_param = update_param + lr * (descent_dir - reg * update_param)
+        return updated_param
+
     def _predict_all(X, U, V):
-        users, items, ratings = X[:, 0], X[:, 1], X[:, 2]
+        users, items = X[:, 0], X[:, 1]
         users, items = jnp.int32(users), jnp.int32(items)
 
         def _predict_scan(carry, user_item):
@@ -220,25 +229,120 @@ def run_epoch_bcd_wolfe(X, U, V, lr, reg):
 
         return preds
 
-    def _wolfe_line_search():
+    def _wolfe_line_search(
+        loss, descent_dir, lr, c_1, c_2, predict_fn, cur_update_fn, loss_fn, cur_grad_fn
+    ):
         # while both conditions are not met
         # check armijo condition
         # check curvature condition
         # if armijo condition fails lr_ = gamma * lr
         # if curvature condition fails lr_ = (lr + lr_)/2
 
-        def _check_armijo_condition():
+        def _check_armijo_condition(*args):
             # IF f' <= f + c_1 * lr * grad(f).T @ descent_dir THEN true ELSE false
             # where f is the prev loss and
             # f' is the loss with the current lr
-            ...
+            (
+                loss,
+                descent_dir,
+                lr,
+                c_1,
+                c_2,
+                predict_fn,
+                cur_update_fn,
+                loss_fn,
+                cur_grad_fn,
+                conditions_satisfied,
+            ) = args
 
-        def _check_curvature_condition():
+            targets = X[:, 2]
+
+            U_, V_ = cur_update_fn(descent_dir, lr)
+            loss_ = loss_fn(target=targets, pred=predict_fn(U_, V_))
+
+            conditions_satisfied_ = loss_ <= loss + c_1 * lr * (
+                -jnp.dot(descent_dir.T, descent_dir)
+            )
+
+            return (
+                loss,
+                descent_dir,
+                lr,
+                c_1,
+                c_2,
+                predict_fn,
+                cur_update_fn,
+                loss_fn,
+                cur_grad_fn,
+                conditions_satisfied_,
+            )
+
+        def _check_curvature_condition(*args):
             # IF grad(f').T @ descent_dir >= c_2 * grad(f).T @ descent_dir THEN true ELSE false
-            ...
+            (
+                loss,
+                descent_dir,
+                lr,
+                c_1,
+                c_2,
+                predict_fn,
+                cur_update_fn,
+                loss_fn,
+                cur_grad_fn,
+                conditions_satisfied,
+            ) = args
 
-        def _check_conditions_wolfe_not_satisfied():
-            return not (_check_armijo_condition() & _check_curvature_condition())
+            targets = X[:, 2]
+
+            U_, V_ = cur_update_fn(descent_dir, lr)
+            errors_fn = jax.grad(loss_fn, argnums=[1])
+            errors = errors_fn(target=targets, pred=predict_fn(U_, V_))
+            grad_ = cur_grad_fn(errors)
+
+            conditions_satisfied_ = jnp.dot(grad_.T, descent_dir) >= c_2 * (
+                -jnp.dot(descent_dir.T, descent_dir)
+            )
+
+            return (
+                loss,
+                descent_dir,
+                lr,
+                c_1,
+                c_2,
+                predict_fn,
+                cur_update_fn,
+                loss_fn,
+                cur_grad_fn,
+                conditions_satisfied_,
+            )
+
+        def _check_conditions_satisfied(*args):
+            (
+                loss,
+                descent_dir,
+                lr,
+                c_1,
+                c_2,
+                predict_fn,
+                cur_update_fn,
+                loss_fn,
+                cur_grad_fn,
+                conditions_satisfied,
+            ) = args
+
+            conditions_satisfied_ = not (conditions_satisfied)
+            return (
+                loss,
+                descent_dir,
+                lr,
+                c_1,
+                c_2,
+                predict_fn,
+                cur_update_fn,
+                loss_fn,
+                cur_grad_fn,
+                conditions_satisfied_,
+            )
 
         def _apply_armijo_cond_update(lr, gamma):
             return lr * gamma
@@ -246,66 +350,196 @@ def run_epoch_bcd_wolfe(X, U, V, lr, reg):
         def _apply_curvature_cond_update(lr, lr_new):
             return (lr + lr_new) / 2
 
-        def _search_lr_wolfe():
+        def _search_lr_wolfe(*args):
+            (
+                loss,
+                descent_dir,
+                lr,
+                c_1,
+                c_2,
+                predict_fn,
+                cur_update_fn,
+                loss_fn,
+                cur_grad_fn,
+                conditions_satisfied,
+            ) = args
+
+            # HYPERPARAMER
+            gamma = 0.8
+
             # update if armijo condition failed
-            armijo_cond_satisfied = _check_armijo_condition()
+            (
+                loss,
+                descent_dir,
+                lr,
+                c_1,
+                c_2,
+                predict_fn,
+                cur_update_fn,
+                loss_fn,
+                cur_grad_fn,
+                armijo_cond_satisfied,
+            ) = _check_armijo_condition(args)
             lr_new = jax.lax.cond(
-                pred=_apply_curvature_cond_update,
+                pred=armijo_cond_satisfied,
                 true_fun=lambda _: lr,
-                false_fun=lambda _: _apply_armijo_cond_update(lr),
-                operands=None,
+                false_fun=_apply_armijo_cond_update,
+                operands=(lr, gamma),
             )
             # update if curvature condition failed
-            curvature_cond_satisfied = _check_curvature_condition()
+            new_args = (
+                loss,
+                descent_dir,
+                lr_new,
+                c_1,
+                c_2,
+                predict_fn,
+                cur_update_fn,
+                loss_fn,
+                cur_grad_fn,
+                conditions_satisfied,
+            )
+            (
+                loss,
+                descent_dir,
+                lr,
+                c_1,
+                c_2,
+                predict_fn,
+                cur_update_fn,
+                loss_fn,
+                cur_grad_fn,
+                curvature_cond_satisfied,
+            ) = _check_curvature_condition(new_args)
             lr_new = jax.lax.cond(
-                pred=_apply_curvature_cond_update,
+                pred=curvature_cond_satisfied,
                 true_fun=lambda _: lr,
-                false_fun=lambda _: _apply_curvature_cond_update(lr, lr_new),
-                operands=None,
+                false_fun=_apply_curvature_cond_update,
+                operands=(lr, lr_new),
             )
             # return new LR
-            return ((), lr_new)
+            return (
+                loss,
+                descent_dir,
+                lr_new,
+                c_1,
+                c_2,
+                predict_fn,
+                cur_update_fn,
+                loss_fn,
+                cur_grad_fn,
+                armijo_cond_satisfied and curvature_cond_satisfied,
+            )
 
         # shape input
-
-        jax.lax.while_loop(
-            cond_fun=_check_conditions_wolfe_not_satisfied,
+        conditions_satisfied = False
+        input_ = (
+            loss,
+            descent_dir,
+            lr,
+            c_1,
+            c_2,
+            predict_fn,
+            cur_update_fn,
+            loss_fn,
+            cur_grad_fn,
+            conditions_satisfied,
+        )
+        # line search while conditions are not satisfied
+        output = jax.lax.while_loop(
+            cond_fun=_check_conditions_satisfied,
             body_fun=_search_lr_wolfe,
-            init_val=None,
+            init_val=input_,
         )
 
-        lr_new = None
+        (
+            loss,
+            descent_dir,
+            lr_new,
+            c_1,
+            c_2,
+            predict_fn,
+            cur_update_fn,
+            loss_fn,
+            cur_grad_fn,
+            conditions_satisfied,
+        ) = output
 
         return lr_new
 
-    def _update(X, U, V, update_target, update_fn):
+    def _update(X, U, V, update_target):
         users, items, ratings = X[:, 0], X[:, 1], X[:, 2]
         users, items = jnp.int32(users), jnp.int32(items)
-        
+
         # predict all
         preds = _predict_all(X, U, V)
-        
+
         # errors
-        descent_dir = grad_loss(target=ratings, pred=preds, loss_fn=mse)
-        
-        # determine LR
-        lr = _wolfe_line_search()
-        
+        errors = ratings - preds
+
+        # set the prediction function
+        predict_fn = lambda U, V: _predict_all(X, U, V)
+
+        # set the gradient function
+        cur_grad_fn = jax.lax.cond(
+            update_target == "V",  # Condition to check
+            lambda _: lambda errors: _grad_func(U, errors),  # If True, use U
+            lambda _: lambda errors: _grad_func(V, errors),  # If False, use V
+            operand=None,  # No additional operands needed
+        )
+
+        # set loss to MSE
+        loss_fn = mse
+        loss = loss_fn(ratings, preds)
+
+        # set the update function
+        cur_update_fn = jax.lax.cond(
+            update_target == "V",  # Check if the target is "V"
+            lambda _: lambda descent_dir, lr: (
+                U,
+                _update_func(V, descent_dir, lr, reg),
+            ),
+            lambda _: lambda descent_dir, lr: (
+                _update_func(U, descent_dir, lr, reg),
+                V,
+            ),
+            operand=None,
+        )
+
+        descent_dir = -cur_grad_fn(errors)
+
+        # HYPERPARAMER
+        c_1 = 1e-4
+        c_2 = 0.9
+
+        lr_ = _wolfe_line_search(
+            loss,
+            descent_dir,
+            lr,
+            c_1,
+            c_2,
+            predict_fn,
+            cur_update_fn,
+            loss_fn,
+            cur_grad_fn,
+        )
+
         # Update latent factors
-        def apply_update(target):
-            updates = jax.vmap(update_fn, in_axes=[None, None, 0, 0, 0, None, None])(
-                U, V, users, items, descent_dir, lr, reg
-            )
-            deltas = updates - target[jnp.newaxis, :, :]
+        # def apply_update(target):
+        #     updates = jax.vmap(update_fn, in_axes=[None, None, 0, 0, 0, None, None])(
+        #         U, V, users, items, errors, lr, reg
+        #     )
+        #     deltas = updates - target[jnp.newaxis, :, :]
 
-            return target + jnp.sum(deltas, axis=0)
+        #     return target + jnp.sum(deltas, axis=0)
 
-        V = jax.lax.cond(update_target == "V", lambda: apply_update(V), lambda: V)
-        U = jax.lax.cond(update_target == "U", lambda: apply_update(U), lambda: U)
+        # V = jax.lax.cond(update_target == "V", lambda: apply_update(V), lambda: V)
+        # U = jax.lax.cond(update_target == "U", lambda: apply_update(U), lambda: U)
+        U, V = cur_update_fn(descent_dir, lr_)
 
         return (U, V), None
 
-    (U, V), _ = _update(X, U, V, "V", _apply_update_V)
-    (U, V), _ = _update(X, U, V, "U", _apply_update_U)
+    (U, V), _ = _update(X, U, V, "V")
+    (U, V), _ = _update(X, U, V, "U")
 
     return U, V
