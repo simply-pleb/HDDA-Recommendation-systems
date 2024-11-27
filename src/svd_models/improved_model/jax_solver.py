@@ -77,164 +77,107 @@ def run_epoch_sgd_batched(batches, U, V, bu, bi, mu, lr, reg):
     return U, V, bu, bi
 
 
-@jax.jit
-def run_epoch_bcd_batched(batches, U, V, bu, bi, mu, lr, reg):
-    def update_step_V(carry, batch):
-        U, V, bu, bi, mu = carry
-        users, items, ratings = batch[:, 0], batch[:, 1], batch[:, 2]
-        # Convert to int32 for indexing
-        users, items = jnp.int32(users), jnp.int32(items)
-
-        preds = jax.vmap(_predict, in_axes=[None, None, None, None, None, 0, 0])(
-            U, V, bu, bi, mu, users, items
-        )
-
-        errors = ratings - preds
-
-        # Update latent factors
-        V_updates = jax.vmap(
-            _apply_update_V, in_axes=[None, None, 0, 0, 0, None, None]
-        )(U, V, users, items, errors, lr, reg)
-        V_deltas = V_updates - V[jnp.newaxis, :, :]
-        V = V + jnp.sum(V_deltas, axis=0)
-
-        return (U, V, bu, bi, mu), None
-
-    def update_step_U(carry, batch):
-        U, V, bu, bi, mu = carry
-        users, items, ratings = batch[:, 0], batch[:, 1], batch[:, 2]
-        # Convert to int32 for indexing
-        users, items = jnp.int32(users), jnp.int32(items)
-
-        preds = jax.vmap(_predict, in_axes=[None, None, None, None, None, 0, 0])(
-            U, V, bu, bi, mu, users, items
-        )
-
-        errors = ratings - preds
-
-        # Update latent factors
-        U_updates = jax.vmap(
-            _apply_update_U, in_axes=[None, None, 0, 0, 0, None, None]
-        )(U, V, users, items, errors, lr, reg)
-        U_deltas = U_updates - U[jnp.newaxis, :, :]
-        U = U + jnp.sum(U_deltas, axis=0)
-
-        return (U, V, bu, bi, mu), None
-
-    def update_step_bu(carry, batch):
-        U, V, bu, bi, mu = carry
-        users, items, ratings = batch[:, 0], batch[:, 1], batch[:, 2]
-        # Convert to int32 for indexing
-        users, items = jnp.int32(users), jnp.int32(items)
-
-        preds = jax.vmap(_predict, in_axes=[None, None, None, None, None, 0, 0])(
-            U, V, bu, bi, mu, users, items
-        )
-
-        errors = ratings - preds
-
-        # Update latent factors
-        bu_updates = jax.vmap(_apply_update_bu, in_axes=[None, 0, 0, None, None])(
-            bu, users, errors, lr, reg
-        )
-        bu_deltas = bu_updates - bu[jnp.newaxis, :]
-        bu = bu + jnp.sum(bu_deltas, axis=0)
-
-        return (U, V, bu, bi, mu), None
-
-    def update_step_bi(carry, batch):
-        U, V, bu, bi, mu = carry
-        users, items, ratings = batch[:, 0], batch[:, 1], batch[:, 2]
-        # Convert to int32 for indexing
-        users, items = jnp.int32(users), jnp.int32(items)
-
-        preds = jax.vmap(_predict, in_axes=[None, None, None, None, None, 0, 0])(
-            U, V, bu, bi, mu, users, items
-        )
-
-        errors = ratings - preds
-
-        # Update latent factors
-        bi_updates = jax.vmap(_apply_update_bi, in_axes=[None, 0, 0, None, None])(
-            bi, items, errors, lr, reg
-        )
-        bi_deltas = bi_updates - bi[jnp.newaxis, :]
-        bi = bi + jnp.sum(bi_deltas, axis=0)
-
-        return (U, V, bu, bi, mu), None
-
-    (U, V, bu, bi, mu), _ = jax.lax.scan(update_step_V, (U, V, bu, bi, mu), batches)
-    (U, V, bu, bi, mu), _ = jax.lax.scan(update_step_U, (U, V, bu, bi, mu), batches)
-    (U, V, bu, bi, mu), _ = jax.lax.scan(update_step_bu, (U, V, bu, bi, mu), batches)
-    (U, V, bu, bi, mu), _ = jax.lax.scan(update_step_bi, (U, V, bu, bi, mu), batches)
-
-    return U, V, bu, bi
-
-
 # @jax.jit
-# def run_epoch_bcd_batched(batches, U, V, bu, bi, mu, lr, reg):
-#     def update_step(carry, batch, update_fn, update_target, delta_shape):
-#         U, V, bu, bi, mu = carry
-#         users, items, ratings = batch[:, 0], batch[:, 1], batch[:, 2]
-#         # Convert to int32 for indexing
-#         users, items = jnp.int32(users), jnp.int32(items)
+def run_epoch_bcd_batched(batches, U, V, bu, bi, mu, lr, reg):
+    def update_step(network_params, batch, update_fn):
+        U, V, bu, bi, mu = network_params
+        users, items, ratings = batch[:, 0], batch[:, 1], batch[:, 2]
+        # Convert to int32 for indexing
+        users, items = jnp.int32(users), jnp.int32(items)
 
-#         # Compute predictions
-#         preds = jax.vmap(_predict, in_axes=[None, None, None, None, None, 0, 0])(
-#             U, V, bu, bi, mu, users, items
-#         )
-#         errors = ratings - preds
+        preds = jax.vmap(_predict, in_axes=[None, None, None, None, None, 0, 0])(
+            U, V, bu, bi, mu, users, items
+        )
 
-#         # Perform updates
-#         def apply_update(target):
-#             indices = jax.lax.cond(update_target == "bu", lambda: users, lambda: items)
-#             updates = jax.lax.cond(
-#                 delta_shape == 3,
-#                 lambda: jax.vmap(update_fn, in_axes=[None, None, 0, 0, 0, None, None])(
-#                     U, V, users, items, errors, lr, reg
-#                 ),
-#                 lambda: jax.vmap(update_fn, in_axes=[None, 0, 0, None, None])(
-#                     target, indices, errors, lr, reg
-#                 ),
-#             )
-#             deltas = jax.lax.cond(
-#                 delta_shape == 3,
-#                 lambda: updates - target[jnp.newaxis, :, :],
-#                 lambda: updates - target[jnp.newaxis, :]
-#             )
-#             return target + jnp.sum(deltas, axis=0)
+        errors = ratings - preds
+        # jax.debug.print("errors={errors}", errors=bu)
 
-#         # Update the respective variable
-#         U = jax.lax.cond(update_target == "U", lambda: apply_update(U), lambda: U)
-#         V = jax.lax.cond(update_target == "V", lambda: apply_update(V), lambda: V)
-#         bu = jax.lax.cond(update_target == "bu", lambda: apply_update(bu), lambda: bu)
-#         bi = jax.lax.cond(update_target == "bi", lambda: apply_update(bi), lambda: bi)
+        # Update latent factors
+        network_params = update_fn(U, V, bu, bi, mu, users, items, errors, lr, reg)
 
-#         return (U, V, bu, bi, mu), None
+        return network_params, None
 
-#     # Perform scans for each target
-#     (U, V, bu, bi, mu), _ = jax.lax.scan(
-#         lambda carry, batch: update_step(carry, batch, _apply_update_V, "V", 3),
-#         (U, V, bu, bi, mu),
-#         batches,
-#     )
-#     (U, V, bu, bi, mu), _ = jax.lax.scan(
-#         lambda carry, batch: update_step(carry, batch, _apply_update_U, "U", 3),
-#         (U, V, bu, bi, mu),
-#         batches,
-#     )
-#     (U, V, bu, bi, mu), _ = jax.lax.scan(
-#         lambda carry, batch: update_step(carry, batch, _apply_update_bu, "bu", 1),
-#         (U, V, bu, bi, mu),
-#         batches,
-#     )
-#     (U, V, bu, bi, mu), _ = jax.lax.scan(
-#         lambda carry, batch: update_step(carry, batch, _apply_update_bi, "bi", 1),
-#         (U, V, bu, bi, mu),
-#         batches,
-#     )
+    update_fn_U = lambda U, V, bu, bi, mu, users, items, errors, lr, reg: (
+        U
+        + jnp.sum(
+            jax.vmap(_apply_update_U, in_axes=[None, None, 0, 0, 0, None, None])(
+                U, V, users, items, errors, lr, reg
+            )
+            - U[jnp.newaxis, :, :],
+            axis=0,
+        ),
+        V,
+        bu,
+        bi,
+        mu,
+    )
 
-#     return U, V, bu, bi
+    update_fn_V = lambda U, V, bu, bi, mu, users, items, errors, lr, reg: (
+        U,
+        V
+        + jnp.sum(
+            jax.vmap(_apply_update_V, in_axes=[None, None, 0, 0, 0, None, None])(
+                U, V, users, items, errors, lr, reg
+            )
+            - V[jnp.newaxis, :, :],
+            axis=0,
+        ),
+        bu,
+        bi,
+        mu,
+    )
+    update_fn_bu = lambda U, V, bu, bi, mu, users, items, errors, lr, reg: (
+        U,
+        V,
+        bu
+        + jnp.sum(
+            jax.vmap(_apply_update_bu, in_axes=[None, 0, 0, None, None])(
+                bu, users, errors, lr, reg
+            )
+            - bu[jnp.newaxis, :],
+            axis=0,
+        ),
+        bi,
+        mu,
+    )
+    update_fn_bi = lambda U, V, bu, bi, mu, users, items, errors, lr, reg: (
+        U,
+        V,
+        bu,
+        bi
+        + jnp.sum(
+            jax.vmap(_apply_update_bi, in_axes=[None, 0, 0, None, None])(
+                bi, items, errors, lr, reg
+            )
+            - bi[jnp.newaxis, :],
+            axis=0,
+        ),
+        mu,
+    )
+
+    # update U
+    (U, V, bu, bi, mu), _ = jax.lax.scan(
+        lambda network_params, data: update_step(network_params, data, update_fn_U),
+        (U, V, bu, bi, mu),
+        batches,
+    )
+    # Update V
+    (U, V, bu, bi, mu), _ = jax.lax.scan(
+        lambda network_params, data: update_step(network_params, data, update_fn_V),
+        (U, V, bu, bi, mu),
+        batches,
+    )  # Update bu
+    (U, V, bu, bi, mu), _ = jax.lax.scan(
+        lambda network_params, data: update_step(network_params, data, update_fn_bu),
+        (U, V, bu, bi, mu),
+        batches,
+    )  # Update bi
+    (U, V, bu, bi, mu), _ = jax.lax.scan(
+        lambda network_params, data: update_step(network_params, data, update_fn_bi),
+        (U, V, bu, bi, mu),
+        batches,
+    )
+    return U, V, bu, bi
 
 
 @jax.jit

@@ -79,6 +79,9 @@ class SVDModelABC(ABC):
         self : SVDModelABC
             Fitted model.
         """
+        if not {'u_id', 'i_id'}.issubset(X.columns):
+            raise ValueError("Input DataFrame must contain 'u_id' and 'i_id' columns.")
+        
         X = self._preprocess_data(X)
 
         if X_val is not None:
@@ -104,10 +107,43 @@ class SVDModelABC(ABC):
         list
             Predicted ratings.
         """
-        return [
-            self.predict_pair(u_id, i_id, clip)
-            for u_id, i_id in zip(X["u_id"], X["i_id"])
-        ]
+        # return [
+        #     self.predict_pair(u_id, i_id, clip)
+        #     for u_id, i_id in zip(X["u_id"], X["i_id"])
+        # ]
+        print("Predicting...")
+        start = time.time()
+        
+        preds = self._predict(X, clip)
+        
+        end = time.time()
+        print(f'took {end - start:.1f} sec')
+        
+        return preds
+    
+    @abstractmethod
+    def _predict(self, X, clip=True):
+        """
+        Predicts ratings for given user-item pairs.
+
+        Parameters
+        ----------
+        X : pandas.DataFrame
+            Data with 'u_id' and 'i_id' columns.
+        clip : bool, default=True
+            Whether to clip predictions to min_rating and max_rating.
+
+        Returns
+        -------
+        list
+            Predicted ratings.
+        """
+        # return [
+        #     self.predict_pair(u_id, i_id, clip)
+        #     for u_id, i_id in zip(X["u_id"], X["i_id"])
+        # ]
+        end = time.time()
+        pass
 
     @abstractmethod
     def predict_pair(self, u_id, i_id, clip=True):

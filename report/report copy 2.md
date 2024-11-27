@@ -41,31 +41,27 @@ The initial step is to to build numerical / mathematical representations for bot
 Modeling the rating of a the $i$ -th user $u$ to the $i$ -th item as the dot product between the representations, then one to `learn` good representations from the data is to minimize the following mathematical objective:
 
 
-$$ 
-
 \begin{equation}
-
 \min_{
     U\in\mathbb{R}^{m\times r}, V\in\mathbb{R}^{n\times r}} L_1 = \frac{1}{2} {\sum_{u=1}^m\sum_{i=1}^n W_{u,i}\left(X - UV^T\right)_{u,i}^2 + \lambda \cdot (||U_u||^2 + ||V_i||^2)
 }
 \end{equation}
-$$
+
 
 For the $k$ -th user and the $j$ -th item, we define $ $ 
 
-$$ 
+
 \begin{equation}
 f_1(U_k, V_j) = \frac{1}{2} (X_{j, k} - U_k ^ T \cdot V_j) ^ 2 + \lambda \cdot (||U_u||^2 + ||V_i||^2)
 \end{equation}
-$$
+
 
 It is easy to see that 
 
-$$ 
 \begin{equation}
 L_1 = \sum _ {(i, j) \in \Omega} f_1(U_k, V_j)
 \end{equation}
-$$
+
 
 
 ## Minimizing the optimizaton objetive
@@ -123,20 +119,20 @@ $$
 
 The mathematical function $f_1$ is simple. Since the term $X_{j, k} - U_k ^ T \cdot V_j$, we have: 
 
-$$
+
 \begin{align*}
     \frac{\nabla f(V_j, U_k)}{\nabla V_j} =  - ((X_{j, k} - U_k ^ T \cdot V_j) \cdot V_j - \lambda \cdot V_j)
 
 \end{align*}
-$$
+
 
 Similarly
 
-$$
+
 \begin{align*}
     \frac{\nabla f(V_j, U_k)}{\nabla V_k} =  - ((X_{j, k} - U_k ^ T \cdot V_j) \cdot U_k -\lambda \cdot U_k )
 \end{align*}
-$$
+
 
 By defining $e_{i, u}$ as 
 $$
@@ -161,19 +157,19 @@ $$
 where $\mu$ is the average rating, $\beta$ is the bias of each user, and $b$ is the bias of each item.
 
 
-$$
+
 \begin{equation}
 f_2(V_k, V_k, b_k, \beta_j) = (X_{j, k} - U_k ^ T \cdot V_j - b_k - \beta_j) ^  2 + \lambda \cdot (\beta_u + b_i + ||U_u||^2 + ||V_i||^2)
 \end{equation}
-$$
+
 
 It is easy to see that 
 
-$$ 
+
 \begin{equation}
 L_2 = \frac{1}{2} \cdot  \sum _ {(i, j) \in \Omega} f_2(U_k, V_j, \beta_k, b_j)
 \end{equation}
-$$
+
 
 
 ## Minimizing the mathematical Objective
@@ -244,17 +240,17 @@ we proceed as follows:
 Since the term $X_{j, k} - U_k ^ T \cdot V_j -\mu - \beta_u - b_i$
 
 
-$$
+
 \begin{align*}
     \frac{\nabla f_2(V_j, U_k, \beta_k, b_j)}{\nabla b_j} =  -  ((X_{j, k} - U_k ^ T \cdot V_j -\mu - \beta_u - b_i) - \lambda \cdot b_j)
 \end{align*}
-$$
 
-$$
+
+
 \begin{align*}
     \frac{\nabla f_2(V_j, U_k, \beta_k, b_j)}{\nabla \beta_k} =  - ((X_{j, k} - U_k ^ T \cdot V_j -\mu - \beta_u - b_i) - \lambda \cdot \beta_k)
 \end{align*}
-$$
+
 
 
 The updates can be expressed as:
@@ -275,10 +271,42 @@ The updates can be expressed as:
 
 # Results
 
+All the results were achieved using minibatch size of $128$, regularization $\lambda=0.02$ on across $20$ iterations (epochs) for every model. 
+
+Final takeaways:
+
+- Block Coordinate Descent was show to be more stable during training than SGD.
+- The choice of correct step size (leaning rate) is vitally important to solve the task.
+- Both models achieve comparable results of  $\text{RMSE} \approx 0.86$.
+- Number of factors beyond $4$ does not substantially decrease $\text{RMSE}$.
+
+## Final RMSE using SGD 
+
 ![alt text](image.png)
 
 ![alt text](image-1.png)
 
+
+## Final RMSE using SGD
+
 ![alt text](image-2.png)
 
 ![alt text](image-3.png)
+
+## Delta loss
+
+![alt text](image-4.png)
+
+![alt text](image-5.png)
+
+## Delta MAE
+
+![alt text](image-6.png)
+
+![alt text](image-7.png)
+
+## Delta RMSE
+
+![alt text](image-8.png)
+
+![alt text](image-9.png)

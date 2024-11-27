@@ -65,49 +65,108 @@ def run_epoch_sgd_batched(batches, U, V, lr, reg):
     return U, V
 
 
-@jax.jit
+# @jax.jit
+# def run_epoch_bcd_batched(batches, U, V, lr, reg):
+
+#     def update_step_V(carry, batch):
+#         U, V = carry
+#         users, items, ratings = batch[:, 0], batch[:, 1], batch[:, 2]
+#         # Convert to int32 for indexing
+#         users, items = jnp.int32(users), jnp.int32(items)
+
+#         preds = jax.vmap(_predict, in_axes=[None, None, 0, 0])(U, V, users, items)
+
+#         errors = ratings - preds
+
+#         # Update latent factors
+#         V_updates = jax.vmap(
+#             _apply_update_V, in_axes=[None, None, 0, 0, 0, None, None]
+#         )(U, V, users, items, errors, lr, reg)
+#         V_deltas = V_updates - V[jnp.newaxis, :, :]
+#         V = V + jnp.sum(V_deltas, axis=0)
+
+#         return (U, V), None
+
+#     def update_step_U(carry, batch):
+#         U, V = carry
+#         users, items, ratings = batch[:, 0], batch[:, 1], batch[:, 2]
+#         # Convert to int32 for indexing
+#         users, items = jnp.int32(users), jnp.int32(items)
+
+#         preds = jax.vmap(_predict, in_axes=[None, None, 0, 0])(U, V, users, items)
+
+#         errors = ratings - preds
+
+#         # Update latent factors
+#         U_updates = jax.vmap(
+#             _apply_update_U, in_axes=[None, None, 0, 0, 0, None, None]
+#         )(U, V, users, items, errors, lr, reg)
+#         U_deltas = U_updates - U[jnp.newaxis, :, :]
+#         U = U + jnp.sum(U_deltas, axis=0)
+
+#         return (U, V), None
+
+#     (U, V), _ = jax.lax.scan(update_step_V, (U, V), batches)
+#     (U, V), _ = jax.lax.scan(update_step_U, (U, V), batches)
+
+#     return U, V
+
+
 def run_epoch_bcd_batched(batches, U, V, lr, reg):
-
-    def update_step_V(carry, batch):
-        U, V = carry
+    def update_step(network_params, batch, update_fn):
+        U, V = network_params
         users, items, ratings = batch[:, 0], batch[:, 1], batch[:, 2]
         # Convert to int32 for indexing
         users, items = jnp.int32(users), jnp.int32(items)
 
-        preds = jax.vmap(_predict, in_axes=[None, None, 0, 0])(U, V, users, items)
+        preds = jax.vmap(_predict, in_axes=[None, None, 0, 0])(
+            U, V, users, items
+        )
 
         errors = ratings - preds
+        # jax.debug.print("errors={errors}", errors=bu)
 
         # Update latent factors
-        V_updates = jax.vmap(
-            _apply_update_V, in_axes=[None, None, 0, 0, 0, None, None]
-        )(U, V, users, items, errors, lr, reg)
-        V_deltas = V_updates - V[jnp.newaxis, :, :]
-        V = V + jnp.sum(V_deltas, axis=0)
+        network_params = update_fn(U, V, users, items, errors, lr, reg)
 
-        return (U, V), None
+        return network_params, None
 
-    def update_step_U(carry, batch):
-        U, V = carry
-        users, items, ratings = batch[:, 0], batch[:, 1], batch[:, 2]
-        # Convert to int32 for indexing
-        users, items = jnp.int32(users), jnp.int32(items)
+    update_fn_U = lambda U, V, users, items, errors, lr, reg: (
+        U
+        + jnp.sum(
+            jax.vmap(_apply_update_U, in_axes=[None, None, 0, 0, 0, None, None])(
+                U, V, users, items, errors, lr, reg
+            )
+            - U[jnp.newaxis, :, :],
+            axis=0,
+        ),
+        V,
+    )
 
-        preds = jax.vmap(_predict, in_axes=[None, None, 0, 0])(U, V, users, items)
+    update_fn_V = lambda U, V, users, items, errors, lr, reg: (
+        U,
+        V
+        + jnp.sum(
+            jax.vmap(_apply_update_V, in_axes=[None, None, 0, 0, 0, None, None])(
+                U, V, users, items, errors, lr, reg
+            )
+            - V[jnp.newaxis, :, :],
+            axis=0,
+        ),
+    )
 
-        errors = ratings - preds
-
-        # Update latent factors
-        U_updates = jax.vmap(
-            _apply_update_U, in_axes=[None, None, 0, 0, 0, None, None]
-        )(U, V, users, items, errors, lr, reg)
-        U_deltas = U_updates - U[jnp.newaxis, :, :]
-        U = U + jnp.sum(U_deltas, axis=0)
-
-        return (U, V), None
-
-    (U, V), _ = jax.lax.scan(update_step_V, (U, V), batches)
-    (U, V), _ = jax.lax.scan(update_step_U, (U, V), batches)
+    # update U
+    (U, V), _ = jax.lax.scan(
+        lambda network_params, data: update_step(network_params, data, update_fn_U),
+        (U, V),
+        batches,
+    )
+    # Update V
+    (U, V), _ = jax.lax.scan(
+        lambda network_params, data: update_step(network_params, data, update_fn_V),
+        (U, V),
+        batches,
+    )
 
     return U, V
 
@@ -203,10 +262,14 @@ def run_epoch_bcd(X, U, V, lr, reg):
     return U, V
 
 
-@jax.jit
+# -------------- EXPERIMENTAL METHODS ---------------
+
+
 def run_epoch_bcd_wolfe(X, U, V, lr, reg):
 
     def _grad_func(fixed_param, errors):
+
+        # jax.vmap(lambda error: )
         return 2 * jnp.dot(fixed_param.T, errors)
 
     def _update_func(update_param, descent_dir, lr, reg):
@@ -258,7 +321,7 @@ def run_epoch_bcd_wolfe(X, U, V, lr, reg):
             targets = X[:, 2]
 
             U_, V_ = cur_update_fn(descent_dir, lr)
-            loss_ = loss_fn(target=targets, pred=predict_fn(U_, V_))
+            loss_ = loss_fn(predict_fn(U_, V_))
 
             conditions_satisfied_ = loss_ <= loss + c_1 * lr * (
                 -jnp.dot(descent_dir.T, descent_dir)
@@ -295,8 +358,8 @@ def run_epoch_bcd_wolfe(X, U, V, lr, reg):
             targets = X[:, 2]
 
             U_, V_ = cur_update_fn(descent_dir, lr)
-            errors_fn = jax.grad(loss_fn, argnums=[1])
-            errors = errors_fn(target=targets, pred=predict_fn(U_, V_))
+            errors_fn = jax.grad(loss_fn, argnums=[0])
+            errors = errors_fn(preds=predict_fn(U_, V_))
             grad_ = cur_grad_fn(errors)
 
             conditions_satisfied_ = jnp.dot(grad_.T, descent_dir) >= c_2 * (
@@ -467,7 +530,7 @@ def run_epoch_bcd_wolfe(X, U, V, lr, reg):
 
         return lr_new
 
-    def _update(X, U, V, update_target):
+    def _update(X, U, V, cur_update_fn, cur_grad_fn):
         users, items, ratings = X[:, 0], X[:, 1], X[:, 2]
         users, items = jnp.int32(users), jnp.int32(items)
 
@@ -480,31 +543,9 @@ def run_epoch_bcd_wolfe(X, U, V, lr, reg):
         # set the prediction function
         predict_fn = lambda U, V: _predict_all(X, U, V)
 
-        # set the gradient function
-        cur_grad_fn = jax.lax.cond(
-            update_target == "V",  # Condition to check
-            lambda _: lambda errors: _grad_func(U, errors),  # If True, use U
-            lambda _: lambda errors: _grad_func(V, errors),  # If False, use V
-            operand=None,  # No additional operands needed
-        )
-
         # set loss to MSE
-        loss_fn = mse
-        loss = loss_fn(ratings, preds)
-
-        # set the update function
-        cur_update_fn = jax.lax.cond(
-            update_target == "V",  # Check if the target is "V"
-            lambda _: lambda descent_dir, lr: (
-                U,
-                _update_func(V, descent_dir, lr, reg),
-            ),
-            lambda _: lambda descent_dir, lr: (
-                _update_func(U, descent_dir, lr, reg),
-                V,
-            ),
-            operand=None,
-        )
+        loss_fn = lambda preds: mse(ratings, preds)
+        loss = loss_fn(preds)
 
         descent_dir = -cur_grad_fn(errors)
 
@@ -539,7 +580,20 @@ def run_epoch_bcd_wolfe(X, U, V, lr, reg):
 
         return (U, V), None
 
-    (U, V), _ = _update(X, U, V, "V")
-    (U, V), _ = _update(X, U, V, "U")
+    # update V
+    cur_update_fn = lambda descent_dir, lr: (
+        U,
+        _update_func(V, descent_dir, lr, reg),
+    )
+    cur_grad_fn = lambda errors: _grad_func(U, errors)
+    (U, V), _ = _update(X, U, V, cur_update_fn, cur_grad_fn)
+
+    # update U
+    cur_update_fn = lambda descent_dir, lr: (
+        _update_func(U, descent_dir, lr, reg),
+        V,
+    )
+    cur_grad_fn = lambda errors: _grad_func(U, errors)
+    (U, V), _ = _update(X, U, V, cur_update_fn, cur_grad_fn)
 
     return U, V

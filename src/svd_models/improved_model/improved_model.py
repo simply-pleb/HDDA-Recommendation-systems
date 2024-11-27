@@ -1,3 +1,5 @@
+import numpy as np
+import pandas as pd
 from svd_models import SVDModelABC
 from svd_models import jax_utils
 from svd_models.improved_model import jax_solver
@@ -94,3 +96,65 @@ class ImprovedSVDModel(SVDModelABC):
         self.bu = bu
         self.bi = bi
         self.mu = mu
+
+    def _predict(self, X, clip=True):
+        # Check that required columns are in the DataFrame
+        if not {"u_id", "i_id"}.issubset(X.columns):
+            raise ValueError("Input DataFrame must contain 'u_id' and 'i_id' columns.")
+
+        # return [
+        #     self.predict_pair(u_id, i_id, clip)
+        #     for u_id, i_id in zip(X["u_id"], X["i_id"])
+        # ]
+
+        X_ = X.copy()
+
+        # Map user and item IDs to indices
+        X_["u_ix"] = X_["u_id"].map(self.user_mapping_).fillna(-1).astype(int)
+        X_["i_ix"] = X_["i_id"].map(self.item_mapping_).fillna(-1).astype(int)
+
+        # Create indicator columns for valid indices
+        X_["u_ic"] = (X_["u_ix"] != -1).astype(int)
+        X_["i_ic"] = (X_["i_ix"] != -1).astype(int)
+
+        # Set u_ix and i_ix values of -1 to 0
+        # These values will be multiplied by 0 and thus canceled
+        # Done in order to not use conditionals
+        X_.loc[X_["u_ix"] == -1, "u_ix"] = 0
+        X_.loc[X_["i_ix"] == -1, "i_ix"] = 0
+
+        # Define prediction function with indicator values
+        pred_fn = (
+            lambda U, V, bu, bi, mu, u_ic, i_ic, u_ix, i_ix: (u_ic * i_ic)
+            * jnp.dot(U[u_ix], V[i_ix])
+            + u_ic * bu[u_ix]
+            + i_ic * bi[i_ix]
+            + mu
+        )
+
+        # Compute predictions
+        user_item_matrix = X_[["u_ic", "i_ic", "u_ix", "i_ix"]].to_numpy()
+        user_item_jnp = jnp.array(user_item_matrix)
+        preds_jnp = jax.vmap(
+            pred_fn, in_axes=[None, None, None, None, None, 0, 0, 0, 0]
+        )(
+            self.U,
+            self.V,
+            self.bu,
+            self.bi,
+            self.mu,
+            user_item_jnp[:, 0],
+            user_item_jnp[:, 1],
+            user_item_jnp[:, 2],
+            user_item_jnp[:, 3],
+        )
+        preds_series = pd.Series(np.array(preds_jnp), index=X_.index)
+
+        X_["ratings"] = preds_series
+
+        if clip:
+            X_["ratings"] = X_["ratings"].clip(
+                lower=self.min_rating, upper=self.max_rating
+            )
+
+        return X_["ratings"]
