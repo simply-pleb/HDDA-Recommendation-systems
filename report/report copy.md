@@ -55,7 +55,7 @@ For the $k$ -th user and the $j$ -th item, we define $ $
 
 $$ 
 \begin{equation}
-f_1(U_k, V_j) = (X_{j, k} - U_k ^ T \cdot V_j) ^ 2 + \lambda \cdot (||U_u||^2 + ||V_i||^2)
+f_1(U_k, V_j) = \frac{1}{2} (X_{j, k} - U_k ^ T \cdot V_j) ^ 2 + \lambda \cdot (||U_u||^2 + ||V_i||^2)
 \end{equation}
 $$
 
@@ -63,7 +63,7 @@ It is easy to see that
 
 $$ 
 \begin{equation}
-L_1 = \frac{1}{2} \cdot \sum _ {(i, j) \in \Omega} f_1(U_k, V_j)
+L_1 = \sum _ {(i, j) \in \Omega} f_1(U_k, V_j)
 \end{equation}
 $$
 
@@ -84,8 +84,9 @@ Given $K$ as the number of iterations and $\alpha$ as the step size.
     1. iterate through all pairs rated (user, item) pairs, For the $j$ -th user and $k$ -th item: 
 
         * apply both updates simultaneously: 
-            - $V_k \gets V_k - \alpha \cdot \nabla f_1(V_k, V_k)$    while fixing $U_j$
-            - $U_j \gets U_j - \alpha \cdot \nabla f_1(V_k, U_j)$    while fixing $U_k$
+            - $V_k \gets V_k - \alpha \cdot \frac{\nabla f_1(V_j, U_k)}{\nabla V_k}$ 
+            
+            - $U_j \gets U_j - \alpha \cdot \frac{\nabla f_1(V_j, U_k)}{\nabla U_j}$  
 
 ### BCD 
 1. Initialize $V$ and $U$
@@ -93,14 +94,13 @@ Given $K$ as the number of iterations and $\alpha$ as the step size.
     1. iterate through all pairs rated (user, item) pairs, For the $j$ -th user and $k$ -th item: 
     
         1. update items representations: 
-            - $V_k \gets V_k - \alpha \cdot \nabla f_1(V_k, V_k)$ 
-            while fixing $U_j$
+            - $V_k \gets V_k - \alpha \cdot \frac{\nabla f_1(V_j, U_k)}{\nabla V_k}$
 
 
     2. iterate through all pairs rated (user, item) pairs, For the $j$ -th user and $k$ -th item:
 
         1. update users representations: 
-            - $U_j \gets U_j - \alpha \cdot \nabla f_1(V_k, U_j)$ while fixing $U_k$        
+            - $U_j \gets U_j - \alpha \cdot \frac{\nabla f_1(V_j, U_k)}{\nabla U_j}$    
 
 ## Prediction
 
@@ -163,7 +163,7 @@ where $\mu$ is the average rating, $\beta$ is the bias of each user, and $b$ is 
 
 $$
 \begin{equation}
-f_2(V_k, V_k, b_k, \beta_j) = (X_{j, k} - U_k ^ T \cdot V_j - b_k - \beta_j) ^  2
+f_2(V_k, V_k, b_k, \beta_j) = (X_{j, k} - U_k ^ T \cdot V_j - b_k - \beta_j) ^  2 + \lambda \cdot (\beta_u + b_i + ||U_u||^2 + ||V_i||^2)
 \end{equation}
 $$
 
@@ -188,10 +188,13 @@ We used the same optimizers as as for the baseline model:
     1. iterate through all pairs rated (user, item) pairs, For the $j$ -th user and $k$ -th item: 
 
         * apply both updates simultaneously: 
-            - $V_k \gets V_k - \alpha \cdot \nabla f_2(V_k, V_k, b_k, \beta_j)$
-            - $U_j \gets U_j - \alpha \cdot \nabla f_2(V_k, V_k, b_k, \beta_j)$
-            - $b_k \gets b_k - \alpha \cdot \nabla f_2(V_k, V_k, b_k, \beta_j)$
-            - $\beta_j \gets \beta_j - \alpha \cdot \nabla f_2(V_k, V_k, b_k, \beta_j)$
+            - $V_k \gets V_k - \alpha \cdot \frac{\nabla f_2(V_j, U_k, \beta_j, b_k)}{\nabla V_k}$
+
+            - $U_j \gets U_j - \alpha \cdot \frac{\nabla f_2(V_j, U_k, \beta_j, b_k)}{\nabla U_j}$
+
+            - $b_j \gets b_j - \alpha \cdot \frac{\nabla f_2(V_j, U_k, \beta_j, b_k)}{\nabla b_k}$
+
+            - $\beta_j \gets \beta_j - \alpha \cdot \frac{\nabla f_2(V_j, U_k, \beta_j, b_k)}{\nabla \beta_j}$
     
             - Each update for a given parameter is carried out while fixing the others.
 
@@ -202,23 +205,24 @@ We used the same optimizers as as for the baseline model:
     1. iterate through all pairs rated (user, item) pairs, For the $j$ -th user and $k$ -th item: 
     
         1. update $V$: 
-            - $V_k \gets V_k - \alpha \cdot \nabla f(V_k, V_k)$ 
+            - $V_k \gets V_k - \alpha \cdot \frac{\nabla f_2(V_j, U_k, \beta_j, b_k)}{\nabla V_k}$
 
 
     2. iterate through all pairs rated (user, item) pairs, For the $j$ -th user and $k$ -th item:
 
         1. update $U$: 
-            - $U_j \gets U_j - \alpha \cdot \nabla f(V_k, U_j)$ 
+            - $U_j \gets U_j - \alpha \cdot \frac{\nabla f_2(V_j, U_k, \beta_j, b_k)}{\nabla U_j}$
+
 
     3. iterate through all pairs rated (user, item) pairs, For the $j$ -th user and $k$ -th item:
 
         1. udpate $b$: 
-            - $b_k \gets b_k - \alpha \cdot \nabla f(V_k, V_k, b_k, \beta_j)$
+            - $b_j \gets b_j - \alpha \cdot \frac{\nabla f_2(V_j, U_k, \beta_j, b_k)}{\nabla b_k}$
         
     4. iterate through all pairs rated (user, item) pairs, For the $j$ -th user and $k$ -th item:
 
         1. update $\beta$: 
-            - $\beta_j \gets \beta_j - \alpha \cdot \nabla f(V_k, V_k, b_k, \beta_j)$
+            - $\beta_j \gets \beta_j - \alpha \cdot \frac{\nabla f_2(V_j, U_k, \beta_j, b_k)}{\nabla \beta_j}$
 
 
 ## Prediction
