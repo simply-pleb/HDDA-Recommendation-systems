@@ -45,8 +45,9 @@ $$
 
 \begin{equation}
 
-\min_{U\in\mathbb{R}^{m\times r}, V\in\mathbb{R}^{n\times r}} L = {\sum_{u=1}^m\sum_{i=1}^n W_{u,i}\left(X - UV^T\right)_{u,i}^2}
-
+\min_{
+    U\in\mathbb{R}^{m\times r}, V\in\mathbb{R}^{n\times r}} L_1 = \frac{1}{2} {\sum_{u=1}^m\sum_{i=1}^n W_{u,i}\left(X - UV^T\right)_{u,i}^2 + \lambda \cdot (||U_u||^2 + ||V_i||^2)
+}
 \end{equation}
 $$
 
@@ -54,7 +55,7 @@ For the $k$ -th user and the $j$ -th item, we define $ $
 
 $$ 
 \begin{equation}
-f(U_k, V_j) = (X_{j, k} - U_k ^ T \cdot V_j) ^  2
+f_1(U_k, V_j) = (X_{j, k} - U_k ^ T \cdot V_j) ^ 2 + \lambda \cdot (||U_u||^2 + ||V_i||^2)
 \end{equation}
 $$
 
@@ -62,10 +63,9 @@ It is easy to see that
 
 $$ 
 \begin{equation}
-L = \sum _ {(i, j) \in \Omega} f(U_k, V_j)
+L_1 = \frac{1}{2} \cdot \sum _ {(i, j) \in \Omega} f_1(U_k, V_j)
 \end{equation}
 $$
-
 
 
 ## Minimizing the optimizaton objetive
@@ -84,27 +84,23 @@ Given $K$ as the number of iterations and $\alpha$ as the step size.
     1. iterate through all pairs rated (user, item) pairs, For the $j$ -th user and $k$ -th item: 
 
         * apply both updates simultaneously: 
-            - $V_k \gets V_k - \alpha \cdot \nabla f(V_k, V_k)$    while fixing $U_j$
-            - $U_j \gets U_j - \alpha \cdot \nabla f(V_k, U_j)$    while fixing $U_k$
-
-
+            - $V_k \gets V_k - \alpha \cdot \nabla f_1(V_k, V_k)$    while fixing $U_j$
+            - $U_j \gets U_j - \alpha \cdot \nabla f_1(V_k, U_j)$    while fixing $U_k$
 
 ### BCD 
-
 1. Initialize $V$ and $U$
 2. For $k$ to $K$:
     1. iterate through all pairs rated (user, item) pairs, For the $j$ -th user and $k$ -th item: 
     
         1. update items representations: 
-            - $V_k \gets V_k - \alpha \cdot \nabla f(V_k, V_k)$ 
+            - $V_k \gets V_k - \alpha \cdot \nabla f_1(V_k, V_k)$ 
             while fixing $U_j$
 
 
     2. iterate through all pairs rated (user, item) pairs, For the $j$ -th user and $k$ -th item:
 
         1. update users representations: 
-            - $U_j \gets U_j - \alpha \cdot \nabla f(V_k, U_j)$ while fixing $U_k$        
-
+            - $U_j \gets U_j - \alpha \cdot \nabla f_1(V_k, U_j)$ while fixing $U_k$        
 
 ## Prediction
 
@@ -125,7 +121,32 @@ $$
 
 ## Mathematical Derivations
 
-To do later
+The mathematical function $f_1$ is simple. Since the term $X_{j, k} - U_k ^ T \cdot V_j$, we have: 
+
+$$
+\begin{align*}
+    \frac{\nabla f(V_j, U_k)}{\nabla V_j} =  - ((X_{j, k} - U_k ^ T \cdot V_j) \cdot V_j - \lambda \cdot V_j)
+
+\end{align*}
+$$
+
+Similarly
+
+$$
+\begin{align*}
+    \frac{\nabla f(V_j, U_k)}{\nabla V_k} =  - ((X_{j, k} - U_k ^ T \cdot V_j) \cdot U_k -\lambda \cdot U_k )
+\end{align*}
+$$
+
+By defining $e_{i, u}$ as 
+$$
+e_{i, u} = X_{i, u} - U_u^T \cdot V_i
+$$
+
+The updates can be expressed as:
+
+- $V_i \gets V_i + \alpha \left(e_{u,i}\cdot U_u - \lambda V_i\right)$
+- $U_u \gets U_u + \alpha \left(e_{u,i}\cdot V_i - \lambda U_u\right)$
 
 
 # Improved Model
@@ -134,11 +155,26 @@ The main downside of the baseline model is its inability to make prediction for 
 
 $$
 
-\min_{U\in\mathbb{R}^{m\times r}, V\in\mathbb{R}^{n\times r}} L = {\sum_{u=1}^m\sum_{i=1}^n W_{u,i}\left(X - \left(\mu + \beta_u + b_i +  UV^T\right)\right)_{u,i}^2}
-
+\min_{U\in\mathbb{R}^{m\times r}, V\in\mathbb{R}^{n\times r}} L_2 = \frac{1}{2} {\sum_{u=1}^m\sum_{i=1}^n W_{u,i}\left(X - \left(\mu + \beta_u + b_i +  UV^T\right)\right)_{u,i}^2} + \lambda \cdot (\beta_u + b_i + ||U_u||^2 + ||V_i||^2)
 $$
 
 where $\mu$ is the average rating, $\beta$ is the bias of each user, and $b$ is the bias of each item.
+
+
+$$
+\begin{equation}
+f_2(V_k, V_k, b_k, \beta_j) = (X_{j, k} - U_k ^ T \cdot V_j - b_k - \beta_j) ^  2
+\end{equation}
+$$
+
+It is easy to see that 
+
+$$ 
+\begin{equation}
+L_2 = \frac{1}{2} \cdot  \sum _ {(i, j) \in \Omega} f_2(U_k, V_j, \beta_k, b_j)
+\end{equation}
+$$
+
 
 ## Minimizing the mathematical Objective
 
@@ -152,13 +188,12 @@ We used the same optimizers as as for the baseline model:
     1. iterate through all pairs rated (user, item) pairs, For the $j$ -th user and $k$ -th item: 
 
         * apply both updates simultaneously: 
-            - $V_k \gets V_k - \alpha \cdot \nabla f(V_k, V_k)$
-            - $U_j \gets U_j - \alpha \cdot \nabla f(V_k, U_j)$
-            - $b_k \gets b_k - \alpha \cdot \nabla f(V_k, V_k, b_k, \beta_j)$
-            - $\beta_j \gets \beta_j - \alpha \cdot \nabla f(V_k, V_k, b_k, \beta_j)$
+            - $V_k \gets V_k - \alpha \cdot \nabla f_2(V_k, V_k, b_k, \beta_j)$
+            - $U_j \gets U_j - \alpha \cdot \nabla f_2(V_k, V_k, b_k, \beta_j)$
+            - $b_k \gets b_k - \alpha \cdot \nabla f_2(V_k, V_k, b_k, \beta_j)$
+            - $\beta_j \gets \beta_j - \alpha \cdot \nabla f_2(V_k, V_k, b_k, \beta_j)$
     
             - Each update for a given parameter is carried out while fixing the others.
-
 
 ### BCD
 
@@ -184,6 +219,54 @@ We used the same optimizers as as for the baseline model:
 
         1. update $\beta$: 
             - $\beta_j \gets \beta_j - \alpha \cdot \nabla f(V_k, V_k, b_k, \beta_j)$
+
+
+## Prediction
+
+Prediction $\hat y$ for a $(u, i)$ pair is made as follows
+
+$$\hat y = \begin{cases} \mu + \beta_u + b_i + UV^T & \text{if}\  (u,i)\in \Omega \\ \mu + \beta_u & \text{if}\  u\in S_u \text{ and } i\not \in S_i \\ \mu + b_i & \text{if}\  u\not\in S_u \text{ and } i \in S_u \\ \mu & \text{otherwise} \end{cases}$$
+
+where $\mu$ is the average prediction as is equal to $$\mu = \frac{1}{\sum_{u=1}^m\sum_{i=1}^n W_{ij}}\sum_{u=1}^m\sum_{i=1}^n{W_{ij}X_{ij}}$$
+
+
+
+## Mathematical Derivations
+
+The mathematical function $f_2$ is fairly similar to $f_1$. The gradients for $f_2$ with respect to $U_k$ and $V_i$ are the same $f_1$. As for the $\beta_k$ and $b_j$, 
+
+we proceed as follows: 
+
+Since the term $X_{j, k} - U_k ^ T \cdot V_j -\mu - \beta_u - b_i$
+
+
+$$
+\begin{align*}
+    \frac{\nabla f_2(V_j, U_k, \beta_k, b_j)}{\nabla b_j} =  -  ((X_{j, k} - U_k ^ T \cdot V_j -\mu - \beta_u - b_i) - \lambda \cdot b_j)
+\end{align*}
+$$
+
+$$
+\begin{align*}
+    \frac{\nabla f_2(V_j, U_k, \beta_k, b_j)}{\nabla \beta_k} =  - ((X_{j, k} - U_k ^ T \cdot V_j -\mu - \beta_u - b_i) - \lambda \cdot \beta_k)
+\end{align*}
+$$
+
+
+The updates can be expressed as:
+
+- $V_i \gets V_i + \alpha \left(e_{u,i}\cdot U_u - \lambda V_i\right)$
+- $U_u \gets U_u + \alpha \left(e_{u,i}\cdot V_i - \lambda U_u\right)$
+
+
+By defining $e_{u,i}$ as $$e_{u,i} = \left(X - \left(\mu + \beta_u + b_i +  UV^T\right)\right)_{u,i}$$
+
+The updates can be expressed as:
+
+- $b_i \gets b_i + \alpha \left(e_{u,i} - \lambda b_i \right)$
+- $\beta_u \gets \beta_u + \alpha \left(e_{u,i} - \lambda \beta_u\right)$
+- $V_i \gets V_i + \alpha \left(e_{u,i}\cdot U_u - \lambda V_i\right)$
+- $U_u \gets U_u + \alpha \left(e_{u,i}\cdot V_i - \lambda U_u\right)$
 
 
 # Results
