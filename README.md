@@ -39,6 +39,10 @@ use
 pip install -e src/
 ```
 
+The ```fit()``` function expects the dataframe to have ```["u_id", "i_id", "rating"]``` columns.
+
+The ```predict()``` function expects the dataframe to have ```["ID", "u_id", "i_id"]``` columns.
+
 ## Results
 
 The optimization problem and the derivations are available in the `report/` folder.
