@@ -5,6 +5,9 @@ import time
 import pandas as pd
 import numpy as np
 
+import flax.serialization as serialization
+import pickle
+
 
 class SVDModelABC(ABC):
     """
@@ -25,7 +28,7 @@ class SVDModelABC(ABC):
         min_rating=1,
         max_rating=5,
         optimizer="BCD",
-        batch_size=128
+        batch_size=128,
     ):
         """
         Initializes the SVD model parameters.
@@ -79,9 +82,9 @@ class SVDModelABC(ABC):
         self : SVDModelABC
             Fitted model.
         """
-        if not {'u_id', 'i_id'}.issubset(X.columns):
+        if not {"u_id", "i_id"}.issubset(X.columns):
             raise ValueError("Input DataFrame must contain 'u_id' and 'i_id' columns.")
-        
+
         X = self._preprocess_data(X)
 
         if X_val is not None:
@@ -113,14 +116,14 @@ class SVDModelABC(ABC):
         # ]
         print("Predicting...")
         start = time.time()
-        
+
         preds = self._predict(X, clip)
-        
+
         end = time.time()
-        print(f'took {end - start:.1f} sec')
-        
+        print(f"took {end - start:.1f} sec")
+
         return preds
-    
+
     @abstractmethod
     def _predict(self, X, clip=True):
         """
@@ -250,7 +253,7 @@ class SVDModelABC(ABC):
             Validation data.
         """
         pass
-    
+
     def _on_epoch_begin(self, epoch_ix):
         """Displays epoch starting log and returns its starting time.
 
@@ -265,8 +268,8 @@ class SVDModelABC(ABC):
             Starting time of the current epoch.
         """
         start = time.time()
-        end = '  | ' if epoch_ix < 9 else ' | '
-        print('Epoch {}/{}'.format(epoch_ix + 1, self.n_epochs), end=end)
+        end = "  | " if epoch_ix < 9 else " | "
+        print("Epoch {}/{}".format(epoch_ix + 1, self.n_epochs), end=end)
 
         return start
 
@@ -290,8 +293,20 @@ class SVDModelABC(ABC):
         end = time.time()
 
         if val_loss is not None:
-            print(f'val_loss: {val_loss:.2f}', end=' - ')
-            print(f'val_rmse: {val_rmse:.2f}', end=' - ')
-            print(f'val_mae: {val_mae:.2f}', end=' - ')
+            print(f"val_loss: {val_loss:.2f}", end=" - ")
+            print(f"val_rmse: {val_rmse:.2f}", end=" - ")
+            print(f"val_mae: {val_mae:.2f}", end=" - ")
 
-        print(f'took {end - start:.1f} sec')
+        print(f"took {end - start:.1f} sec")
+
+    def save(self, filepath):
+        """Saves the model using flax.serialization."""
+        model_state = serialization.to_state_dict(self.__dict__)
+        with open(filepath, "wb") as f:
+            pickle.dump(model_state, f)
+
+    def load(self, filepath):
+        """Loads the model using flax.serialization."""
+        with open(filepath, "rb") as f:
+            model_state = pickle.load(f)
+        self.__dict__.update(serialization.from_state_dict(self.__dict__, model_state))
