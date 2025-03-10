@@ -1,7 +1,7 @@
 import itertools
 import numpy as np
-from svd_models import SimpleSVDModel, ImprovedSVDModel, ExperimentalSVDModel
-
+from recommendex import SimpleSVDModel, ImprovedSVDModel
+# import recommendex
 import pandas as pd
 from scipy.sparse import csr_matrix
 

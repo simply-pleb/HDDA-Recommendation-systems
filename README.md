@@ -20,7 +20,7 @@ The data is based on the [MovieLens 100k dataset](https://grouplens.org/datasets
 
 ## Usage
 
-For now, to run a model of your choice, execute the following command:
+<!-- For now, to run a model of your choice, execute the following command:
 
 ```bash
 python src/main.py
@@ -31,7 +31,13 @@ and edit the `src/main.py` file to choose the model you want to run.
 You can also choose the optimizer that you want to use:
 
 - SGD
-- BCD (ALS)
+- BCD (ALS) -->
+
+use
+
+```
+pip install -e src/
+```
 
 ## Results
 

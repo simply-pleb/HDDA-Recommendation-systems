@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recommendex"
+version = "0.1.0"
+description = "JAX implementation of Funk SVD using SGD and BCD."
+readme = "README.md"
+requires-python = ">=3.6"
+license = { text = "MIT" }
+authors = [{ name = "Ahmadsho Akdodshoev", email = "akdodshoev@gmail.com" }]
+dependencies = [
+    "jax==0.4.35",
+    "jaxlib==0.4.35",
+    "ml-dtypes==0.5.1",
+    "numpy<2",
+    "opt-einsum==3.4.0",
+    "pandas==2.2.3",
+    "python-dateutil==2.9.0.post0",
+    "pytz==2025.1",
+    "scipy==1.15.2",
+    "six==1.17.0",
+    "tzdata==2025.1",
+] # Add dependencies here
+
+[project.urls]
+Homepage = "https://github.com/simply-pleb/HDDA-Recommendation-systems"
+
+# [project.classifiers]
+# Programming_Language = "Python :: 3"
+# License = "OSI Approved :: MIT License"
+# Operating_System = "OS Independent"
