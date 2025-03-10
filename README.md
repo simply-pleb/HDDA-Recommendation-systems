@@ -43,6 +43,8 @@ The ```fit()``` function expects the dataframe to have ```["u_id", "i_id", "rati
 
 The ```predict()``` function expects the dataframe to have ```["ID", "u_id", "i_id"]``` columns.
 
+You can also view this [colab notebook](https://colab.research.google.com/drive/1morWqoKkJIAUaSit84v6FA33MIAspvp6?usp=sharing) for the example of the usage.
+
 ## Results
 
 The optimization problem and the derivations are available in the `report/` folder.
