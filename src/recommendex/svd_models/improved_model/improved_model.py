@@ -8,6 +8,20 @@ from jax import numpy as jnp
 
 
 class ImprovedSVDModel(SVDModelABC):
+    def __init__(self, *args, **kwargs):
+        # Call the parent class __init__ method with all arguments
+        super().__init__(*args, **kwargs)
+
+        # Specify beforehand all the properties. This is used for serialization
+        self.V = None
+        self.U = None
+        self.bu = None
+        self.bi = None
+        self.mu = None
+        self.global_mean_ = None  # TODO: why do we have both mu and global mean?
+        self.item_mapping_ = None
+        self.user_mapping_ = None
+
     def predict_pair(self, u_id, i_id, clip=True):
         user_known, item_known = False, False
         pred = self.mu

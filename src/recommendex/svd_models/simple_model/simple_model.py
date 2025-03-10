@@ -8,6 +8,18 @@ from jax import numpy as jnp
 
 
 class SimpleSVDModel(SVDModelABC):
+    def __init__(self, *args, **kwargs):
+        # Call the parent class __init__ method with all arguments
+        super().__init__(*args, **kwargs)
+
+        # Specify beforehand all the properties. This is used for serialization
+        self.V = None
+        self.U = None
+        self.mu = None
+        self.global_mean_ = None  # TODO: why do we have both mu and global mean?
+        self.item_mapping_ = None
+        self.user_mapping_ = None
+
     def predict_pair(self, u_id, i_id, clip=True):
         user_known, item_known = False, False
         pred = 0
@@ -120,17 +132,17 @@ class SimpleSVDModel(SVDModelABC):
         preds_jnp = jax.vmap(jax_solver._predict, in_axes=[None, None, 0, 0])(
             self.U, self.V, user_item_jnp[:, 0], user_item_jnp[:, 1]
         )
-        
+
         preds_series = pd.Series(np.array(preds_jnp), index=X_valid_users_items.index)
         X_valid_users_items["ratings"] = preds_series
 
         X_["ratings"] = self.mu
-      
+
         X_.loc[X_valid_users_items.index, "ratings"] = X_valid_users_items["ratings"]
 
         if clip:
             X_["ratings"] = X_["ratings"].clip(
                 lower=self.min_rating, upper=self.max_rating
-            )  
+            )
 
         return X_["ratings"]

@@ -1,7 +1,7 @@
 import itertools
 import numpy as np
 from recommendex import SimpleSVDModel, ImprovedSVDModel
-# import recommendex
+
 import pandas as pd
 from scipy.sparse import csr_matrix
 
@@ -142,37 +142,6 @@ def run_improved_model():
     submission_name = f"improved_n_factors={n_factors}_optimizer={optimizer}.csv"
 
     submission.to_csv(SUBMISSION_DIR + submission_name, index=False)
-
-
-def run_experimental_model():
-    data_dir = "data/csv/ratings_given.csv"
-    data_pred_dir = "data/csv/ratings_test_eval.csv"
-
-    users_dir = "data/csv/users_proc.csv"
-    movies_dir = "data/csv/movies_proc.csv"
-
-    data = pd.read_csv(data_dir, names=["u_id", "i_id", "rating"])
-    data_pred = pd.read_csv(data_pred_dir, names=["u_id", "i_id", "rating"])
-    users_df = pd.read_csv(users_dir)
-    users_df = users_df.rename(columns={"user_id": "u_id"})
-    movies_df = pd.read_csv(movies_dir)
-    movies_df = movies_df.rename(columns={"movie_id": "i_id"})
-
-    data_train, data_val = train_test_split(data, test_size=0.05, shuffle=True)
-
-    # print(data_train)
-    # print(data_val)
-
-    model = ExperimentalSVDModel(
-        n_factors=10, shuffle=True, optimizer="BCD", n_epochs=10
-    )
-
-    model.fit(data_train, data_val)
-    model.fit_residual(data_train, users_metadata=users_df, items_metadata=movies_df)
-
-    pred = model.predict(data_val[:5])
-    print(data_val[:5])
-    print(pred)
 
 
 def run_model(
